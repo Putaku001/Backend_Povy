@@ -285,10 +285,59 @@ async function registerTransaction({
 }
 
 async function findOwnedAccount(userId, accountNumber) {
-  return Account.findOne({
+  const ownedAccount = await Account.findOne({
     userId,
     accountNumber: String(accountNumber),
   });
+
+  if (ownedAccount) {
+    return ownedAccount;
+  }
+
+  const legacyAccount = await Account.findOne({
+    accountNumber: String(accountNumber),
+    $or: [{ userId: { $exists: false } }, { userId: null }],
+  });
+
+  if (!legacyAccount) {
+    return null;
+  }
+
+  legacyAccount.userId = userId;
+  await legacyAccount.save();
+
+  await Transaction.updateMany(
+    {
+      accountNumber: legacyAccount.accountNumber,
+      $or: [{ userId: { $exists: false } }, { userId: null }],
+    },
+    {
+      $set: { userId },
+    }
+  );
+
+  return legacyAccount;
+}
+
+async function migrateLegacyAccountsToUser(userId) {
+  const legacyAccounts = await Account.find({
+    $or: [{ userId: { $exists: false } }, { userId: null }],
+  });
+
+  for (const account of legacyAccounts) {
+    account.userId = userId;
+    await account.save();
+
+    await Transaction.updateMany(
+      {
+        accountNumber: account.accountNumber,
+        $or: [{ userId: { $exists: false } }, { userId: null }],
+      },
+      {
+        $set: { userId },
+      }
+    );
+  }
 }
 
 app.post('/api/auth/register', async (req, res) => {
@@ -411,6 +460,7 @@ app.post('/api/accounts', authMiddleware, async (req, res) => {
 
 app.get('/api/accounts', authMiddleware, async (req, res) => {
   try {
+    await migrateLegacyAccountsToUser(req.authUser._id);
     const accounts = await Account.find({ userId: req.authUser._id }).sort({ createdAt: -1 }).lean();
     res.json(accounts.map(sanitizeAccount));
   } catch (err) {
