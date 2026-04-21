@@ -322,6 +322,9 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json(buildAuthPayload(user, token));
   } catch (err) {
     console.error(err);
+    if (err && err.code === 11000) {
+      return res.status(409).json({ message: 'Ya existe una cuenta con ese email.' });
+    }
     res.status(500).json({ message: 'No se pudo registrar el usuario.' });
   }
 });
