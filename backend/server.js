@@ -1,5 +1,6 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -105,6 +106,14 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
 }
 
 function verifyPassword(password, user) {
+  if (!user || !user.passwordHash) return false;
+
+  if (user.passwordHash.startsWith('$2a$') || user.passwordHash.startsWith('$2b$')) {
+    return bcrypt.compareSync(String(password), user.passwordHash);
+  }
+
+  if (!user.passwordSalt) return false;
+
   const { passwordHash } = hashPassword(password, user.passwordSalt);
   return crypto.timingSafeEqual(Buffer.from(passwordHash, 'hex'), Buffer.from(user.passwordHash, 'hex'));
 }
@@ -301,12 +310,12 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ message: 'Ya existe una cuenta con ese email.' });
     }
 
-    const { passwordHash, passwordSalt } = hashPassword(password);
+    const passwordHash = bcrypt.hashSync(String(password), 10);
     const user = await User.create({
       name: finalName,
       email: normalizedEmail,
       passwordHash,
-      passwordSalt,
+      passwordSalt: '',
     });
 
     const token = await createSessionForUser(user);
