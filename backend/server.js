@@ -471,11 +471,11 @@ app.get('/api/accounts', authMiddleware, async (req, res) => {
 
 app.get('/api/accounts/:accountNumber', authMiddleware, async (req, res) => {
   try {
-    const account = await findOwnedAccount(req.authUser._id, req.params.accountNumber).lean();
+    const account = await findOwnedAccount(req.authUser._id, req.params.accountNumber);
     if (!account) {
       return res.status(404).json({ message: 'Cuenta no encontrada.' });
     }
-    res.json(sanitizeAccount(account));
+    res.json(sanitizeAccount(account.toObject ? account.toObject() : account));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'No se pudo obtener la cuenta.' });
@@ -484,7 +484,7 @@ app.get('/api/accounts/:accountNumber', authMiddleware, async (req, res) => {
 
 app.get('/api/accounts/:accountNumber/transactions', authMiddleware, async (req, res) => {
   try {
-    const account = await findOwnedAccount(req.authUser._id, req.params.accountNumber).lean();
+    const account = await findOwnedAccount(req.authUser._id, req.params.accountNumber);
     if (!account) {
       return res.status(404).json({ message: 'Cuenta no encontrada.' });
     }
