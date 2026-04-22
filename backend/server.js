@@ -614,62 +614,38 @@ app.delete('/api/accounts/:accountNumber', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/payments', authMiddleware, async (req, res) => {
-  const { accountNumber, amount, currency, description, merchantName } = req.body || {};
+app.post('/api/payments', async (req, res) => {
+  const { amount, currency, description, merchantName } = req.body || {};
 
-  if (!accountNumber || amount === undefined || amount === null) {
+  if (amount === undefined || amount === null) {
     return res.status(400).json({
       status: 'error',
-      message: 'Faltan datos obligatorios: accountNumber y amount.',
+      message: 'Falta el dato obligatorio: amount.',
     });
   }
 
   try {
-    const account = await findOwnedAccount(req.authUser._id, accountNumber);
-    if (!account) {
-      return res.status(404).json({ status: 'error', message: 'Cuenta no encontrada.' });
-    }
-
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({ status: 'error', message: 'Monto invalido.' });
     }
 
-    const finalCurrency = allowedCurrencies.includes(currency) ? currency : account.currency;
-    const approved = numericAmount <= account.balance;
-
-    if (approved) {
-      account.balance -= numericAmount;
-      await account.save();
-    }
-
-    const tx = await registerTransaction({
-      userId: req.authUser._id,
-      accountNumber: account.accountNumber,
-      type: 'debit',
-      status: approved ? 'approved' : 'declined',
-      amount: numericAmount,
-      currency: finalCurrency,
-      description: description || 'Pago de prueba por numero de cuenta',
-      source: 'account_payment',
+    res.json({
+      status: 'approved',
       transactionId: buildTransactionId('POVY'),
-      balanceAfter: account.balance,
+      message: 'Pago simulado correctamente.',
+      amount: numericAmount,
+      currency: allowedCurrencies.includes(currency) ? currency : 'USD',
+      description: description || 'Pago de prueba',
       merchantName: merchantName || 'Povy Test',
-      failureReason: approved ? undefined : 'Fondos insuficientes en la cuenta.',
     });
-
-    res.json(
-      paymentResponse(tx, account, {
-        message: approved ? 'Pago aprobado.' : 'Fondos insuficientes en la cuenta.',
-      })
-    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ status: 'error', message: 'Error interno al procesar el pago.' });
   }
 });
 
-app.post('/api/payments/card', authMiddleware, async (req, res) => {
+app.post('/api/payments/card', async (req, res) => {
   const { cardNumber, expMonth, expYear, cvv, amount, currency, description, merchantName } =
     req.body || {};
 
@@ -682,10 +658,7 @@ app.post('/api/payments/card', authMiddleware, async (req, res) => {
 
   try {
     const cleanCardNumber = String(cardNumber).replace(/\s+/g, '');
-    const account = await Account.findOne({
-      userId: req.authUser._id,
-      'card.cardNumber': cleanCardNumber,
-    });
+    const account = await Account.findOne({ 'card.cardNumber': cleanCardNumber });
 
     if (!account) {
       return res.status(404).json({ status: 'error', message: 'Tarjeta no encontrada.' });
@@ -713,7 +686,7 @@ app.post('/api/payments/card', authMiddleware, async (req, res) => {
     }
 
     const tx = await registerTransaction({
-      userId: req.authUser._id,
+      userId: account.userId,
       accountNumber: account.accountNumber,
       type: 'debit',
       status: approved ? 'approved' : 'declined',
