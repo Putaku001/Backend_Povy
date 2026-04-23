@@ -10,7 +10,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "express": "^4.19.2",
-    "mongoose": "^7.6.0",
-    "mongose": "^0.0.2-security"
+    "pg": "^8.16.3"
   }
 }
