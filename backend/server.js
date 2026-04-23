@@ -250,36 +250,29 @@ async function authMiddleware(req, res, next) {
   }
 
   try {
-    const sessionResult = await query(
+    const authResult = await query(
       `
-        SELECT user_id
-        FROM sessions
-        WHERE token_hash = $1 AND expires_at > NOW()
+        SELECT
+          u.id,
+          u.name,
+          u.email,
+          u.password_hash,
+          u.password_salt,
+          u.created_at,
+          u.updated_at
+        FROM sessions s
+        INNER JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = $1 AND s.expires_at > NOW()
         LIMIT 1
       `,
       [hashToken(token)]
     );
 
-    if (!sessionResult.rows.length) {
+    if (!authResult.rows.length) {
       return res.status(401).json({ message: 'Sesion invalida o expirada.' });
     }
 
-    const userResult = await query(
-      `
-        SELECT id, name, email, password_hash, password_salt, created_at, updated_at
-        FROM users
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [sessionResult.rows[0].user_id]
-    );
-
-    const user = mapUser(userResult.rows[0]);
-    if (!user) {
-      return res.status(401).json({ message: 'Usuario no encontrado.' });
-    }
-
-    req.authUser = user;
+    req.authUser = mapUser(authResult.rows[0]);
     req.authToken = token;
     next();
   } catch (err) {
